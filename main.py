@@ -9,6 +9,7 @@ API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
 TARGET_PHONE = os.getenv("TARGET_PHONE", "")
 INTERVAL_HOURS = int(os.getenv("INTERVAL_HOURS", "20"))
+BURST_COUNT = int(os.getenv("BURST_COUNT", "10"))
 
 
 def extract_wait_seconds(error_str: str) -> int:
@@ -16,20 +17,28 @@ def extract_wait_seconds(error_str: str) -> int:
     return int(match.group(1)) if match else 3600
 
 
-async def trigger():
-    try:
-        async with Client(":memory:", api_id=API_ID, api_hash=API_HASH) as app:
-            await app.send_code_request(TARGET_PHONE)
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✓ 触发请求成功")
-    except FloodWait as e:
-        wait_hours = e.value / 3600
-        print(
-            f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ⏳ 限制中，需等待 {e.value} 秒 ({wait_hours:.1f} 小时)"
-        )
-        return e.value + 3600
-    except Exception as e:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✗ 错误: {e}")
-        return INTERVAL_HOURS * 3600
+async def trigger(count: int = 1):
+    success = 0
+    for i in range(count):
+        try:
+            async with Client(":memory:", api_id=API_ID, api_hash=API_HASH) as app:
+                await app.send_code_request(TARGET_PHONE)
+                success += 1
+                print(
+                    f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✓ 触发请求成功 ({i + 1}/{count})"
+                )
+        except FloodWait as e:
+            wait_hours = e.value / 3600
+            print(
+                f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ⏳ 限制中，需等待 {e.value} 秒 ({wait_hours:.1f} 小时)"
+            )
+            return e.value + 3600, success
+        except Exception as e:
+            print(
+                f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✗ 错误: {e} ({i + 1}/{count})"
+            )
+            return INTERVAL_HOURS * 3600, success
+    return INTERVAL_HOURS * 3600, success
 
 
 if __name__ == "__main__":
@@ -38,7 +47,8 @@ if __name__ == "__main__":
 
     while True:
         try:
-            wait_seconds = asyncio.run(trigger())
+            wait_seconds, success = asyncio.run(trigger(BURST_COUNT))
+            print(f"本輪成功: {success}/{BURST_COUNT}")
             sleep_time = (
                 wait_seconds
                 if wait_seconds > INTERVAL_HOURS * 3600
