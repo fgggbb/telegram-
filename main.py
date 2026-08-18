@@ -2,6 +2,11 @@ import os
 import time
 import asyncio
 import re
+
+# Python 3.14+ no longer auto-creates an event loop; pyrogram 2.0.106
+# calls asyncio.get_event_loop() at import time, so set one explicitly.
+asyncio.set_event_loop(asyncio.new_event_loop())
+
 from pyrogram import Client
 from pyrogram.errors import FloodWait
 
@@ -21,12 +26,16 @@ async def trigger(count: int = 1):
     success = 0
     for i in range(count):
         try:
-            async with Client(":memory:", api_id=API_ID, api_hash=API_HASH) as app:
-                await app.send_code_request(TARGET_PHONE)
-                success += 1
-                print(
-                    f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✓ 触发请求成功 ({i + 1}/{count})"
-                )
+            app = Client(":memory:", api_id=API_ID, api_hash=API_HASH)
+            await app.connect()
+            try:
+                await app.send_code(TARGET_PHONE)
+            finally:
+                await app.disconnect()
+            success += 1
+            print(
+                f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✓ 触发请求成功 ({i + 1}/{count})"
+            )
         except FloodWait as e:
             wait_hours = e.value / 3600
             print(
